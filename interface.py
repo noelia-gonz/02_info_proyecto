@@ -9,7 +9,10 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class interface:
     def __init__(self, root):
         self.root = root
-        self.root.title("")
+        self.root.title("Graph Interface")
+        # Configurar tamaño inicial de la ventana
+        self.root.geometry("900x700")
+
         self.G = Graph()
         self.last_node = None
         self.fixed_size = False
@@ -19,41 +22,55 @@ class interface:
         self.current_x_limits = self.default_x_limits
         self.current_y_limits = self.default_y_limits
 
-        # Setup del grafico en la interfaz
-        self.fig, self.ax = plt.subplots(figsize=(8, 6))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=root)
+        # Crear frames para organizar la interfaz
+        control_frame = tk.Frame(root)
+        control_frame.grid(row=0, column=0, sticky="ew", pady=5)
+
+        mode_frame = tk.Frame(root)
+        mode_frame.grid(row=1, column=0, sticky="ew", pady=5)
+
+        search_frame = tk.Frame(root)
+        search_frame.grid(row=2, column=0, sticky="ew", pady=5)
+
+        # Frame para el gráfico (ahora ocupa row 3)
+        graph_frame = tk.Frame(root)
+        graph_frame.grid(row=3, column=0, sticky="nsew")
+
+        # Configurar pesos para que el gráfico se expanda
+        root.grid_rowconfigure(3, weight=1)
+        root.grid_columnconfigure(0, weight=1)
+
+        # Setup del grafico en la interfaz (ahora en graph_frame)
+        self.fig, self.ax = plt.subplots(figsize=(7, 5))  # Tamaño un poco más pequeño
+        self.canvas = FigureCanvasTkAgg(self.fig, master=graph_frame)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        control_frame = tk.Frame(root)
-        control_frame.pack(pady=5)
-#BOtones:)
+        # Botones en control_frame
         tk.Button(control_frame, text="Example", command=self.load_example).pack(side=tk.LEFT)
         tk.Button(control_frame, text="Load", command=self.load_graph).pack(side=tk.LEFT, padx=5)
         tk.Button(control_frame, text="Save", command=self.save_graph).pack(side=tk.LEFT)
         tk.Button(control_frame, text="Fix Size", command=self.toggle_fixed_size).pack(side=tk.LEFT, padx=5)
-        tk.Button(control_frame, text="Clear Graph", command=self.clear_graph, relief=tk.RAISED, padx=5, pady=5).pack(side=tk.LEFT)
+        tk.Button(control_frame, text="Clear Graph", command=self.clear_graph).pack(side=tk.LEFT)
 
-
-        mode_frame = tk.Frame(root)
-        mode_frame.pack(pady=5)
+        # Botones de modo en mode_frame
         self.add_mode_btn = tk.Button(mode_frame, text="Add Nodes", command=self.set_add_mode)
         self.add_mode_btn.pack(side=tk.LEFT)
         self.connect_mode_btn = tk.Button(mode_frame, text="Connect Nodes", command=self.set_connect_mode)
         self.connect_mode_btn.pack(side=tk.LEFT, padx=5)
 
-        search_frame = tk.Frame(root)
-        search_frame.pack(pady=5)
+        # Busqueda en search_frame
         tk.Label(search_frame, text="Find neighbors of:").pack(side=tk.LEFT)
         self.node_entry = tk.Entry(search_frame, width=5)
         self.node_entry.pack(side=tk.LEFT, padx=5)
         tk.Button(search_frame, text="Find", command=self.find_neighbors).pack(side=tk.LEFT)
 
         self.status = tk.Label(root, text="Ready")
-        self.status.pack()
+        self.status.grid(row=4, column=0, sticky="ew", pady=5)
 
         self.canvas.mpl_connect("button_press_event", self.handle_click)
         self.mode = "add"
         self.update_drawing()
+
 
 #Funcion para poder hacer "resizing" en el grafico
     def toggle_fixed_size(self):
