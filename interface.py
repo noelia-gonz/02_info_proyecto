@@ -7,6 +7,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class interface:
+
     def __init__(self, root):
         self.root = root
         self.root.title("Graph Interface")
