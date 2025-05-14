@@ -1,219 +1,349 @@
 import tkinter as tk
-from tkinter import filedialog
-from graph import Graph, Node
+from tkinter import filedialog, messagebox
+from graph import Graph
+from node import Node, Distance
 from test_graph import CreateGraph_1
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.patches import Circle, Arrow
 
 
-class interface:
-
+class GraphInterface:
     def __init__(self, root):
         self.root = root
-        self.root.title("Graph Interface")
-        # Configurar tamaño inicial de la ventana
-        self.root.geometry("900x700")
+        self.root.title("Air Route Explorer - Versión Final")
+        self.root.geometry("1000x800")
 
-        self.G = Graph()
-        self.last_node = None
-        self.fixed_size = False
-        # Setup inicial del grafico
-        self.default_x_limits = (0, 10)
-        self.default_y_limits = (0, 10)
-        self.current_x_limits = self.default_x_limits
-        self.current_y_limits = self.default_y_limits
+        # Estado de la aplicación
+        self.graph = Graph()
+        self.mode = "add"
+        self.selected_node = None
+        self.reachable_nodes = []
+        self.shortest_path = []
+        self.fixed_zoom = False
+        self.zoom_limits = None
 
-        # Crear frames para organizar la interfaz
-        control_frame = tk.Frame(root)
-        control_frame.grid(row=0, column=0, sticky="ew", pady=5)
+        # Configuración de colores
+        self.colors = {
+            'normal': '#1f77b4',
+            'selected': '#ff7f0e',
+            'neighbor': '#2ca02c',
+            'reachable': '#d62728',
+            'path': '#9467bd',
+            'start': '#8c564b',
+            'end': '#e377c2'
+        }
 
-        mode_frame = tk.Frame(root)
-        mode_frame.grid(row=1, column=0, sticky="ew", pady=5)
+        self.setup_ui()
+        self.load_example()
 
-        search_frame = tk.Frame(root)
-        search_frame.grid(row=2, column=0, sticky="ew", pady=5)
+    def setup_ui(self):
+        """Configura todos los elementos de la interfaz"""
+        main_frame = tk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Frame para el gráfico (ahora ocupa row 3)
-        graph_frame = tk.Frame(root)
-        graph_frame.grid(row=3, column=0, sticky="nsew")
+        # Frame de controles
+        control_frame = tk.Frame(main_frame)
+        control_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Configurar pesos para que el gráfico se expanda
-        root.grid_rowconfigure(3, weight=1)
-        root.grid_columnconfigure(0, weight=1)
+        # Frame de gráfico
+        graph_frame = tk.Frame(main_frame)
+        graph_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Setup del grafico en la interfaz (ahora en graph_frame)
-        self.fig, self.ax = plt.subplots(figsize=(7, 5))  # Tamaño un poco más pequeño
-        self.canvas = FigureCanvasTkAgg(self.fig, master=graph_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        # Botones de control
+        tk.Button(control_frame, text="Ejemplo", command=self.load_example).pack(side=tk.LEFT)
+        tk.Button(control_frame, text="Cargar", command=self.load_graph).pack(side=tk.LEFT, padx=5)
+        tk.Button(control_frame, text="Guardar", command=self.save_graph).pack(side=tk.LEFT)
+        tk.Button(control_frame, text="Limpiar", command=self.clear_graph).pack(side=tk.LEFT, padx=5)
+        tk.Button(control_frame, text="Bloquear Zoom", command=self.toggle_zoom).pack(side=tk.LEFT)
 
-        # Botones en control_frame
-        tk.Button(control_frame, text="Example", command=self.load_example).pack(side=tk.LEFT)
-        tk.Button(control_frame, text="Load", command=self.load_graph).pack(side=tk.LEFT, padx=5)
-        tk.Button(control_frame, text="Save", command=self.save_graph).pack(side=tk.LEFT)
-        tk.Button(control_frame, text="Fix Size", command=self.toggle_fixed_size).pack(side=tk.LEFT, padx=5)
-        tk.Button(control_frame, text="Clear Graph", command=self.clear_graph).pack(side=tk.LEFT)
+        # Botones de modo
+        self.add_btn = tk.Button(control_frame, text="Añadir Nodos", command=lambda: self.set_mode("add"))
+        self.add_btn.pack(side=tk.LEFT, padx=5)
+        self.connect_btn = tk.Button(control_frame, text="Conectar Nodos", command=lambda: self.set_mode("connect"))
+        self.connect_btn.pack(side=tk.LEFT)
 
-        # Botones de modo en mode_frame
-        self.add_mode_btn = tk.Button(mode_frame, text="Add Nodes", command=self.set_add_mode)
-        self.add_mode_btn.pack(side=tk.LEFT)
-        self.connect_mode_btn = tk.Button(mode_frame, text="Connect Nodes", command=self.set_connect_mode)
-        self.connect_mode_btn.pack(side=tk.LEFT, padx=5)
+        # Frame de búsqueda
+        search_frame = tk.Frame(main_frame)
+        search_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Busqueda en search_frame
-        tk.Label(search_frame, text="Find neighbors of:").pack(side=tk.LEFT)
-        self.node_entry = tk.Entry(search_frame, width=5)
+        tk.Label(search_frame, text="Nodo:").pack(side=tk.LEFT)
+        self.node_entry = tk.Entry(search_frame, width=10)
         self.node_entry.pack(side=tk.LEFT, padx=5)
-        tk.Button(search_frame, text="Find", command=self.find_neighbors).pack(side=tk.LEFT)
+        tk.Button(search_frame, text="Buscar Vecinos", command=self.find_neighbors).pack(side=tk.LEFT)
 
-        self.status = tk.Label(root, text="Ready")
-        self.status.grid(row=4, column=0, sticky="ew", pady=5)
+        # Frame de alcance
+        reach_frame = tk.Frame(main_frame)
+        reach_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.canvas.mpl_connect("button_press_event", self.handle_click)
-        self.mode = "add"
-        self.update_drawing()
+        tk.Label(reach_frame, text="Alcance desde:").pack(side=tk.LEFT)
+        self.reach_entry = tk.Entry(reach_frame, width=10)
+        self.reach_entry.pack(side=tk.LEFT, padx=5)
+        tk.Button(reach_frame, text="Mostrar Alcance", command=self.show_reachable).pack(side=tk.LEFT)
 
+        # Frame de ruta más corta
+        path_frame = tk.Frame(main_frame)
+        path_frame.pack(fill=tk.X, padx=5, pady=5)
 
-#Funcion para poder hacer "resizing" en el grafico
-    def toggle_fixed_size(self):
-        self.fixed_size = not self.fixed_size
-        if self.fixed_size:
-            self.current_x_limits = self.default_x_limits
-            self.current_y_limits = self.default_y_limits
-            self.status.config(text="Fixed size mode ON")
+        tk.Label(path_frame, text="Ruta más corta:").pack(side=tk.LEFT)
+        self.start_entry = tk.Entry(path_frame, width=10)
+        self.start_entry.pack(side=tk.LEFT)
+        tk.Label(path_frame, text="a").pack(side=tk.LEFT)
+        self.end_entry = tk.Entry(path_frame, width=10)
+        self.end_entry.pack(side=tk.LEFT, padx=5)
+        tk.Button(path_frame, text="Calcular Ruta", command=self.find_shortest_path).pack(side=tk.LEFT)
+
+        # Configurar el gráfico
+        self.setup_graph(graph_frame)
+
+        # Barra de estado
+        self.status = tk.Label(main_frame, text="Listo", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status.pack(fill=tk.X)
+
+    def setup_graph(self, parent_frame):
+        """Configura el área de visualización del gráfico"""
+        self.fig, self.ax = plt.subplots(figsize=(8, 6))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=parent_frame)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.canvas.mpl_connect('button_press_event', self.on_click)
+        self.ax.set_title("Explorador de Rutas Aéreas")
+        self.ax.grid(True)
+
+    def toggle_zoom(self):
+        """Alterna el bloqueo del zoom"""
+        self.fixed_zoom = not self.fixed_zoom
+
+        if self.fixed_zoom and self.graph.nodes:
+            xs = [n.x for n in self.graph.nodes]
+            ys = [n.y for n in self.graph.nodes]
+            x_margin = max(3, (max(xs) - min(xs))*0.2 )
+            y_margin = max(3, (max(ys) - min(ys))*0.2 )
+            self.zoom_limits = (min(xs) - x_margin, max(xs) + x_margin, min(ys) - y_margin, max(ys) + y_margin)
+            self.update_status("Zoom bloqueado")
         else:
-            self.auto_adjust_limits()
-            self.status.config(text="Auto resize mode ON")
-        self.update_drawing()
-
-    def auto_adjust_limits(self):
-        if not self.G.nodes:
-            return
-
-        xs = [node.x for node in self.G.nodes]
-        ys = [node.y for node in self.G.nodes]
-
-        x_margin = max(3, (max(xs) - min(xs)) * 0.2)
-        y_margin = max(3, (max(ys) - min(ys)) * 0.2)
-
-        self.current_x_limits = (min(xs) - x_margin, max(xs) + x_margin)
-        self.current_y_limits = (min(ys) - y_margin, max(ys) + y_margin)
-#definicion de "añadir nodos"
-    def set_add_mode(self):
-        self.mode = "add"
-        self.last_node = None
-        self.status.config(text="Mode: Add Nodes")
-        self.update_drawing()
-#lo mismo para los segmentos
-    def set_connect_mode(self):
-        self.mode = "connect"
-        self.status.config(text="Mode: Connect Nodes")
-        self.update_drawing()
-#ejemplo
-    def load_example(self):
-        self.G = CreateGraph_1()
-        if not self.fixed_size:
-            self.auto_adjust_limits()
-        self.update_drawing()
-        self.status.config(text="Example graph loaded")
-#file
-    def load_graph(self):
-        filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
-        if filename:
-            self.G = Graph.load_from_file(filename)
-            if not self.fixed_size:
-                self.auto_adjust_limits()
+            self.zoom_limits = None
+            self.update_status("Zoom automático")
             self.update_drawing()
-            self.status.config(text=f"Loaded: {filename}")
 
-    def save_graph(self):
-        if not self.G.nodes:
-            self.status.config(text="No graph to save")
-            return
+    def set_mode(self, mode):
+        """Establece el modo de interacción"""
+        self.mode = mode
+        self.selected_node = None
+        self.add_btn.config(relief=tk.SUNKEN if mode == "add" else tk.RAISED)
+        self.connect_btn.config(relief=tk.SUNKEN if mode == "connect" else tk.RAISED)
+        self.update_status(f"Modo: {'Añadir nodos' if mode == 'add' else 'Conectar nodos'}")
+        self.update_drawing()
 
-        filename = filedialog.asksaveasfilename(defaultextension=".txt")
-        if filename:
-            self.G.save_to_file(filename)
-            self.status.config(text=f"Saved to {filename}")
-
-    def find_neighbors(self):
-        name = self.node_entry.get()
-        node = self.G.get_node_by_name(name)
-        if node:
-            neighbors = [n.name for n in node.neighbors]
-            self.status.config(text=f"Neighbors of {name}: {', '.join(neighbors)}")
-            self.update_drawing(focus=name)
-        else:
-            self.status.config(text=f"Node {name} not found")
-
-    def handle_click(self, event):
+    def on_click(self, event):
+        """Maneja clics en el área del gráfico"""
         if not event.inaxes:
             return
 
         x, y = event.xdata, event.ydata
 
-        if self.fixed_size:
-            x = max(self.current_x_limits[0], min(self.current_x_limits[1], x))
-            y = max(self.current_y_limits[0], min(self.current_y_limits[1], y))
-
         if self.mode == "add":
-            name = chr(65 + len(self.G.nodes)) if len(self.G.nodes) < 26 else f"N{len(self.G.nodes)}"
-            self.G.add_node(Node(name, x, y))
-            self.status.config(text=f"Added node {name} at ({x:.1f}, {y:.1f})")
-        else:
-            clicked = self.G.closest(x, y)
-            if not self.last_node:
-                self.last_node = clicked
-                self.status.config(text=f"Selected {clicked.name}. Click target node")
-            else:
-                if self.last_node != clicked:
-                    self.G.connect(self.last_node.name, clicked.name)
-                    self.status.config(text=f"Connected {self.last_node.name} to {clicked.name}")
-                self.last_node = None
+            name = f"N{len(self.graph.nodes) + 1}"
+            self.graph.add_node(Node(name, x, y))
+            self.update_status(f"Nodo {name} añadido en ({x:.1f}, {y:.1f})")
+        elif self.mode == "connect":
+            clicked_node = self.graph.closest(x, y)
+
+            if clicked_node:
+                if not self.selected_node:
+                    self.selected_node = clicked_node
+                    self.update_status(f"Seleccionado {clicked_node.name}. Elija nodo destino")
+                else:
+                    if self.selected_node != clicked_node:
+                        if clicked_node in self.selected_node.neighbors:
+                            self.update_status(f"Conexión {self.selected_node.name}→{clicked_node.name} ya existe")
+                        else:
+                            self.graph.connect(self.selected_node.name, clicked_node.name)
+                            self.graph.connect(clicked_node.name, self.selected_node.name)
+                            self.update_status(f"Conectado {self.selected_node.name} ↔ {clicked_node.name}")
+                    else:
+                        self.update_status("No se puede conectar un nodo consigo mismo")
+                    self.selected_node = None
 
         self.update_drawing()
 
-    def update_drawing(self, focus=None):
-        self.ax.clear()
+    def load_example(self):
+        """Carga el gráfico de ejemplo"""
+        self.graph = CreateGraph_1()
+        self.update_status("Gráfico de ejemplo cargado")
+        self.update_drawing()
 
-        # Dibujar flechas
-        for node in self.G.nodes:
-            for neighbor in node.neighbors:
-                dx = neighbor.x - node.x
-                dy = neighbor.y - node.y
-                self.ax.arrow(
-                    node.x, node.y, dx * 0.9, dy * 0.85,
-                    head_width=0.3, head_length=0.4,
-                    fc='red', ec='red'
-                )
+    def load_graph(self):
+        """Carga un gráfico desde archivo"""
+        filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        if filename:
+            try:
+                self.graph = Graph.load_from_file(filename)
+                self.update_status(f"Gráfico cargado desde {filename}")
+                self.update_drawing()
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo cargar el archivo:\n{str(e)}")
 
-        # Dibujar nodos
-        for node in self.G.nodes:
-            color = 'green' if focus and node.name == focus else ('red' if self.last_node == node else 'blue')
-            self.ax.plot(node.x, node.y, 'o', markersize=15, color=color)
-            self.ax.text(node.x, node.y + 0.3, node.name, ha='center')
+    def save_graph(self):
+        """Guarda el gráfico actual en un archivo"""
+        if not self.graph.nodes:
+            messagebox.showwarning("Advertencia", "No hay nodos para guardar")
+            return
 
-        # límites
-        self.ax.set_xlim(self.current_x_limits)
-        self.ax.set_ylim(self.current_y_limits)
-        self.ax.grid(True)
-
-        title = "Graph Visualization "
-        self.ax.set_title(title)
-
-        self.canvas.draw()
+        filename = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+        if filename:
+            try:
+                self.graph.save_to_file(filename)
+                self.update_status(f"Gráfico guardado en {filename}")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{str(e)}")
 
     def clear_graph(self):
-        self.G = Graph()
-        self.last_node = None
+        """Limpia el gráfico actual"""
+        self.graph = Graph()
+        self.selected_node = None
+        self.reachable_nodes = []
+        self.shortest_path = []
+        self.update_status("Gráfico limpiado")
+        self.update_drawing()
+
+    def find_neighbors(self):
+        """Resalta los vecinos de un nodo"""
+        node_name = self.node_entry.get()
+        node = self.graph.get_node_by_name(node_name)
+
+        if node:
+            self.reachable_nodes = []
+            self.shortest_path = []
+            self.selected_node = node
+            self.update_status(f"Vecinos de {node_name}: {', '.join(n.name for n in node.neighbors)}")
+        else:
+            self.update_status(f"Nodo {node_name} no encontrado")
+        self.update_drawing()
+
+    def show_reachable(self):
+        """Muestra todos los nodos alcanzables desde un nodo"""
+        node_name = self.reach_entry.get()
+        node = self.graph.get_node_by_name(node_name)
+
+        if node:
+            self.reachable_nodes = self.graph.reachable_nodes(node_name)
+            self.shortest_path = []
+            self.update_status(f"Nodos alcanzables desde {node_name}: {len(self.reachable_nodes)} nodos")
+        else:
+            self.update_status(f"Nodo {node_name} no encontrado")
+        self.update_drawing()
+
+    def find_shortest_path(self):
+        """Calcula y muestra la ruta más corta entre dos nodos"""
+        start_name = self.start_entry.get()
+        end_name = self.end_entry.get()
+
+        start_node = self.graph.get_node_by_name(start_name)
+        end_node = self.graph.get_node_by_name(end_name)
+
+        if not start_node or not end_node:
+            self.update_status("Error: Uno o ambos nodos no existen")
+            return
+
+        path = self.graph.FindShortestPath(start_name, end_name)
+
+        if path:
+            self.shortest_path = path.nodes
+            self.reachable_nodes = []
+            self.update_status(f"Ruta más corta: {' → '.join(n.name for n in path.nodes)} (Costo: {path.cost:.2f})")
+        else:
+            self.shortest_path = []
+            self.update_status(f"No hay ruta entre {start_name} y {end_name}")
+        self.update_drawing()
+
+    def update_drawing(self):
+        """Actualiza el gráfico con el estado actual"""
         self.ax.clear()
+
+        # Dibujar todos los segmentos
+        for node in self.graph.nodes:
+            for neighbor in node.neighbors:
+                if node.name < neighbor.name:  # Dibujar solo una vez por par
+                    self.draw_segment(node, neighbor)
+
+        # Resaltar ruta más corta
+        if len(self.shortest_path) > 1:
+            for i in range(len(self.shortest_path) - 1):
+                start = self.shortest_path[i]
+                end = self.shortest_path[i + 1]
+                self.draw_segment(start, end, is_path=True)
+
+        # Dibujar todos los nodos
+        for node in self.graph.nodes:
+            self.draw_node(node)
+
+        # Configuración del gráfico
         self.ax.grid(True)
-        self.ax.set_xlim(self.current_x_limits)
-        self.ax.set_ylim(self.current_y_limits)
+        self.ax.set_xlabel("Coordenada X")
+        self.ax.set_ylabel("Coordenada Y")
+        self.ax.set_title("Explorador de Rutas Aéreas")
+
+        # Aplicar límites de zoom
+        if self.fixed_zoom and self.zoom_limits:
+            self.ax.set_xlim(self.zoom_limits[0], self.zoom_limits[1])
+            self.ax.set_ylim(self.zoom_limits[2], self.zoom_limits[3])
+        elif self.graph.nodes:
+            xs = [n.x for n in self.graph.nodes]
+            ys = [n.y for n in self.graph.nodes]
+            x_margin = max(3, (max(xs) - min(xs)) * 0.2)
+            y_margin = max(3, (max(ys) - min(ys)) * 0.2)
+            self.ax.set_xlim(min(xs) - x_margin, max(xs) + x_margin)
+            self.ax.set_ylim(min(ys) - y_margin, max(ys) + y_margin)
+
         self.canvas.draw()
-        self.status.config(text="Graph cleared")
+
+    def draw_segment(self, start, end, is_path=False):
+        """Dibuja un segmento entre dos nodos"""
+        color = self.colors['path'] if is_path else '#aaaaaa'
+        linewidth = 2 if is_path else 1
+
+        # Dibujar flecha
+        arrow = Arrow(start.x, start.y, end.x - start.x, end.y - start.y,
+                      width=0.2, color=color, linewidth=linewidth)
+        self.ax.add_patch(arrow)
+
+        # Mostrar costo
+        mid_x = (start.x + end.x) / 2
+        mid_y = (start.y + end.y) / 2
+        cost = Distance(start, end)
+        self.ax.text(mid_x, mid_y, f"{cost:.1f}", ha='center', va='center',
+                     bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+    def draw_node(self, node):
+        """Dibuja un nodo con el estilo apropiado"""
+        if node in self.shortest_path:
+            if node == self.shortest_path[0]:
+                color = self.colors['start']
+            elif node == self.shortest_path[-1]:
+                color = self.colors['end']
+            else:
+                color = self.colors['path']
+        elif node == self.selected_node:
+            color = self.colors['selected']
+        elif node in self.reachable_nodes:
+            color = self.colors['reachable']
+        elif any(node in n.neighbors for n in [self.selected_node] if self.selected_node):
+            color = self.colors['neighbor']
+        else:
+            color = self.colors['normal']
+
+        circle = Circle((node.x, node.y), 0.4, color=color, zorder=10)
+        self.ax.add_patch(circle)
+        self.ax.text(node.x, node.y + 0.5, node.name, ha='center', va='center',
+                     fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+    def update_status(self, message):
+        """Actualiza la barra de estado"""
+        self.status.config(text=message)
+        self.root.update()
 
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = interface(root)
+    app = GraphInterface(root)
     root.mainloop()
