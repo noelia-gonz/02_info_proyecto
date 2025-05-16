@@ -1,9 +1,4 @@
 import matplotlib.pyplot as plt
-from node import Node
-from path import Path
-import heapq
-
-import matplotlib.pyplot as plt
 from node import Node, Distance
 from path import Path
 import heapq

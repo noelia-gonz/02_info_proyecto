@@ -1,4 +1,3 @@
-from node import Node
 class Segment:
     def __init__(self, name, origin, destination):
         self.name = name
