@@ -2,6 +2,7 @@ import heapq
 from path import Path
 from airSpace import AirSpace  # New for Version 3
 from node import Node, Distance
+import matplotlib.pyplot as plt
 
 
 class Graph:
@@ -189,7 +190,6 @@ class Graph:
 
     def draw(self, focus=None):
         """Draw the graph (simple version for testing)"""
-        import matplotlib.pyplot as plt
 
         plt.figure(figsize=(10, 8))
 

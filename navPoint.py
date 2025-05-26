@@ -26,3 +26,9 @@ class NavPoint:
         c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
         return 6371 * c  # Earth radius in km
+
+    def get_coords(self):
+        return (self.latitude, self.longitude)
+
+    def __repr__(self):
+        return f"NavPoint({self.number}, {self.name}, {self.latitude:.4f}, {self.longitude:.4f})"
