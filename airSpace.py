@@ -1,4 +1,3 @@
-# airSpace.py
 from navPoint import NavPoint
 from navSegment import NavSegment
 from navAirport import NavAirport
@@ -13,27 +12,16 @@ class AirSpace:
 
     def load_from_files(self, nav_file, seg_file, airport_file):
         try:
-            # Verificar que los archivos existen
-            for f in [nav_file, seg_file, airport_file]:
-                if not os.path.exists(f):
-                    raise FileNotFoundError(f"Archivo no encontrado: {f}")
-
             # ----------- Cargar NavPoints -----------
             with open(nav_file, 'r') as f:
                 for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('-'):
-                        continue
-                    parts = line.split()
+                    parts = line.strip().split()
                     if len(parts) >= 4:
-                        try:
-                            number = int(parts[0])
-                            name = parts[1]
-                            lat = float(parts[2])
-                            lon = float(parts[3])
-                            self.nav_points[number] = NavPoint(number, name, lat, lon)
-                        except (ValueError, IndexError) as e:
-                            print(f"Error procesando línea en nav_file: {line}. Error: {e}")
+                        number = int(parts[0])
+                        name = parts[1]
+                        lat = float(parts[2])
+                        lon = float(parts[3])
+                        self.nav_points[number] = NavPoint(number, name, lat, lon)
 
             print(f"NavPoints cargados: {len(self.nav_points)}")
 
@@ -43,46 +31,45 @@ class AirSpace:
                     parts = line.strip().split()
                     if len(parts) < 3:
                         continue
-                    try:
-                        origin = int(parts[0])
-                        dest = int(parts[1])
-                        distance = float(parts[2])
-                        segment = NavSegment(origin, dest, distance)
-                        self.nav_segments.append(segment)
+                    origin = int(parts[0])
+                    dest = int(parts[1])
+                    distance = float(parts[2])
+                    segment = NavSegment(origin, dest, distance)
+                    self.nav_segments.append(segment)
 
-                        if origin in self.nav_points and dest in self.nav_points:
-                            self.nav_points[origin].add_neighbor(self.nav_points[dest])
-                            self.nav_points[dest].add_neighbor(self.nav_points[origin])  # Bidireccional
-                        else:
-                            print(f"⚠️ Segmento ignorado: {origin} → {dest} (nodo no encontrado)")
-                    except Exception as e:
-                        print(f"Error procesando línea en seg_file: {line}. Error: {e}")
+                    if origin in self.nav_points and dest in self.nav_points:
+                        self.nav_points[origin].add_neighbor(self.nav_points[dest])
+                        self.nav_points[dest].add_neighbor(self.nav_points[origin])  # Bidireccional
+                    else:
+                        print(f"⚠️ Segmento ignorado: {origin} → {dest} (nodo no encontrado)")
 
             print(f"NavSegments válidos cargados: {len(self.nav_segments)}")
 
-            # ----------- Cargar NavAirports -----------
-            with open(airport_file, 'r') as f:
-                current_airport = None
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    if line.isupper() and len(line) == 4:
-                        current_airport = NavAirport(line)
-                        self.nav_airports[line] = current_airport
-                    elif line.endswith('.D'):
-                        point = self.find_point_by_name(line)
-                        if point and current_airport:
-                            current_airport.sids.append(point)
-                    elif line.endswith('.A'):
-                        point = self.find_point_by_name(line)
-                        if point and current_airport:
-                            current_airport.stars.append(point)
+            # ----------- Cargar NavAirports (si existe) -----------
+            if airport_file and airport_file.strip():
+                with open(airport_file, 'r') as f:
+                    current_airport = None
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line.isupper() and len(line) == 4:
+                            current_airport = NavAirport(line)
+                            self.nav_airports[line] = current_airport
+                        elif line.endswith('.D'):
+                            point = self.find_point_by_name(line)
+                            if point and current_airport:
+                                current_airport.sids.append(point)
+                        elif line.endswith('.A'):
+                            point = self.find_point_by_name(line)
+                            if point and current_airport:
+                                current_airport.stars.append(point)
 
             print(f"Aeropuertos cargados: {len(self.nav_airports)}")
 
         except Exception as e:
             print(f"❌ Error al cargar archivos: {e}")
+            raise e
 
     def find_point_by_name(self, name):
         for point in self.nav_points.values():
