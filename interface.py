@@ -130,28 +130,63 @@ class GraphInterface:
     def update_drawing(self):
         self.ax.clear()
         if self.display_mode == "airspace" and self.graph.airspace:
-            for seg in self.graph.airspace.nav_segments:
-                o = self.graph.airspace.nav_points.get(seg.origin_number)
-                d = self.graph.airspace.nav_points.get(seg.destination_number)
-                if o and d:
-                    self.ax.plot([o.longitude, d.longitude], [o.latitude, d.latitude], color='gray', linewidth=0.5)
-            for p in self.graph.airspace.nav_points.values():
-                color = self.colors['normal']
-                if self.selected_node and p == self.selected_node:
-                    color = self.colors['selected']
-                elif p in self.reachable_nodes:
-                    color = self.colors['reachable']
-                elif p in self.shortest_path:
-                    if p == self.shortest_path[0]: color = self.colors['start']
-                    elif p == self.shortest_path[-1]: color = self.colors['end']
-                    else: color = self.colors['path']
-                self.ax.plot(p.longitude, p.latitude, 'o', color=color)
-                self.ax.text(p.longitude, p.latitude + 0.05, p.name, ha='center', fontsize=6)
-        self.ax.grid(True)
-        self.ax.set_xlabel("Longitud")
-        self.ax.set_ylabel("Latitud")
-        self.canvas.draw()
+            # Calcular límites automáticamente
+            lons = [p.longitude for p in self.graph.airspace.nav_points.values()]
+            lats = [p.latitude for p in self.graph.airspace.nav_points.values()]
 
+            if lons and lats:  # Solo si hay datos
+                # Añadir un pequeño margen (10% del rango)
+                lon_margin = (max(lons) - min(lons)) * 0.1
+                lat_margin = (max(lats) - min(lats)) * 0.1
+
+                self.ax.set_xlim(min(lons) - lon_margin, max(lons) + lon_margin)
+                self.ax.set_ylim(min(lats) - lat_margin, max(lats) + lat_margin)
+
+        for p in self.graph.airspace.nav_points.values():
+            color = self.colors['normal']
+            if self.selected_node and p == self.selected_node:
+                color = self.colors['selected']
+            elif p in self.reachable_nodes:
+                color = self.colors['reachable']
+            elif p in self.shortest_path:
+                if p == self.shortest_path[0]:
+                    color = self.colors['start']
+                elif p == self.shortest_path[-1]:
+                    color = self.colors['end']
+                else:
+                    color = self.colors['path']
+
+            # Puntos más pequeños y transparentes
+            self.ax.plot(p.longitude, p.latitude, 'o',
+                         color=color, markersize=4, alpha=0.7)
+
+            # Mostrar solo algunos nombres para evitar sobreposición
+            if (abs(p.longitude - min(lons)) > (max(lons) - min(lons)) / 20 or
+                    abs(p.latitude - min(lats)) > (max(lats) - min(lats)) / 20):
+                self.ax.text(p.longitude, p.latitude + 0.01, p.name,
+                             ha='center', fontsize=6, alpha=0.8)
+
+        for seg in self.graph.airspace.nav_segments:
+            o = self.graph.airspace.nav_points.get(seg.origin_number)
+            d = self.graph.airspace.nav_points.get(seg.destination_number)
+            if o and d:
+                # Líneas más gruesas y con color distintivo
+                linewidth = 1.0
+                color = '#1f77b4'  # Azul
+                alpha = 0.5
+
+                # Resaltar segmentos del camino más corto
+                if (self.shortest_path and
+                        o in self.shortest_path and
+                        d in self.shortest_path and
+                        abs(self.shortest_path.index(o) - self.shortest_path.index(d)) == 1):
+                    linewidth = 2.5
+                    color = self.colors['path']
+                    alpha = 0.9
+
+                self.ax.plot([o.longitude, d.longitude],
+                             [o.latitude, d.latitude],
+                             color=color, linewidth=linewidth, alpha=alpha)
 if __name__ == "__main__":
     root = tk.Tk()
     app = GraphInterface(root)
