@@ -6,7 +6,28 @@
  
 Versión 1 generada por Noelia.
 Versión 1 verificada por Mar.
+<<<<<<< HEAD
+Versión 1 comunicada por Noelia.
+URL del video: https://youtu.be/UBFS7nt_jhE
+
+Versión 2 generada por Noelia.
+Versión 2 verificada por Mar.
+Versión 2 comunicada por Mar.
+URL del video: https://youtu.be/jn-rcugDAHc
+
+=======
 Versión 1 comunicada por Paloma.
 URL del video: https://youtu.be/UBFS7nt_jhE
 
 Version 2 generada por Noelia.
+Versión 2 verificada por Mar. 
+Versión 2 comunicada por Mar. 
+URL del video: https://youtu.be/jn-rcugDAHc
+
+Versión 3 generada por Mar.
+Versión 3 verificada por Noelia.
+Versión 3 comunicada por Mar.
+URL del video: https://youtu.be/OtdrUFQNZcU
+
+
+>>>>>>> v3-dev2
