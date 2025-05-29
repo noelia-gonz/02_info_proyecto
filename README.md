@@ -5,8 +5,7 @@
 "Nuestro programa es capaz de mostrar un grafico en pantalla desde datos almacenados en formato .txt, o de forma interactiva con el usuario."
  
 Versión 1 generada por Noelia.
-Versión 1 verificada por Mar.
-<<<<<<< HEAD
+Versión 1 verificada por Paloma.
 Versión 1 comunicada por Noelia.
 URL del video: https://youtu.be/UBFS7nt_jhE
 
@@ -15,19 +14,11 @@ Versión 2 verificada por Mar.
 Versión 2 comunicada por Mar.
 URL del video: https://youtu.be/jn-rcugDAHc
 
-=======
-Versión 1 comunicada por Paloma.
-URL del video: https://youtu.be/UBFS7nt_jhE
-
-Version 2 generada por Noelia.
-Versión 2 verificada por Mar. 
-Versión 2 comunicada por Mar. 
-URL del video: https://youtu.be/jn-rcugDAHc
-
 Versión 3 generada por Mar.
 Versión 3 verificada por Noelia.
 Versión 3 comunicada por Mar.
 URL del video: https://youtu.be/OtdrUFQNZcU
 
+Verion 4 generada por Noelia
+Version 4 verificada por Mar
 
->>>>>>> v3-dev2
