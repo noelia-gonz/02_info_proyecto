@@ -6,7 +6,7 @@ class Segment:
         self.cost = self.calculate_cost()
 
     def calculate_cost(self):
-        return ((self.origin.x - self.destination.x) ** 2 +(self.origin.y - self.destination.y) ** 2) ** 0.5
+        return ((self.origin.longitude - self.destination.longitude) ** 2 + (self.origin.latitude - self.destination.latitude) ** 2) ** 0.5
 
     def __str__(self):
         return "Segment '{}': {} -> {}, cost: {:.2f}".format(

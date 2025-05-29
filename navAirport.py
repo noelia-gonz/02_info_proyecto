@@ -1,7 +1,9 @@
 
 class NavAirport:
-    def __init__(self, name):
+    def __init__(self, name,latitude=None, longitude=None):
         self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
         self.sids = []  # List of NavPoints for departures
         self.stars = []  # List of NavPoints for arrivals
 

@@ -6,6 +6,10 @@ import os
 import platform
 import subprocess
 import matplotlib.pyplot as plt
+from segment import Segment
+from navAirport import NavAirport
+import random
+from datetime import datetime, timedelta
 
 
 class AirSpace:
@@ -45,15 +49,16 @@ class AirSpace:
                             origin = int(parts[0])
                             dest = int(parts[1])
                             distance = float(parts[2])
-                            segment = NavSegment(origin, dest, distance)
+                            segment = NavSegment(origin, dest, distance,
+                                                 origin_point=self.nav_points.get(origin),
+                                                 destination_point=self.nav_points.get(dest))
                             self.nav_segments.append(segment)
-
 
                             if origin in self.nav_points and dest in self.nav_points:
                                 self.nav_points[origin].add_neighbor(self.nav_points[dest])
                                 self.nav_points[dest].add_neighbor(self.nav_points[origin])  # Bidirectional
                             else:
-                                print(f"⚠️ Segment ignored: {origin} → {dest} (node not found)")
+                                print(f"Segment ignored: {origin} → {dest} (node not found)")
             else:
                 raise FileNotFoundError(f"Segments file not found: {seg_file}")
 
@@ -86,6 +91,57 @@ class AirSpace:
         except Exception as e:
             print(f" Error loading files: {e}")
             raise e
+
+    def load_from_saved_graph(self, filename):
+        self.nav_points = {}
+        self.nav_segments = []
+        self.nav_airports = {}
+
+        mode = None
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    if "NavPoints" in line:
+                        mode = "nav"
+                    elif "Segments" in line:
+                        mode = "seg"
+                    elif "Airports" in line:
+                        mode = "air"
+                    continue
+
+                parts = line.split(',')
+
+                if mode == "nav":
+                    number = int(parts[0])
+                    name = parts[1]
+                    lat = float(parts[2])
+                    lon = float(parts[3])
+                    self.nav_points[number] = NavPoint(number, name, lat, lon)
+
+                elif mode == "seg":
+                    origin_number = int(parts[0])
+                    dest_number = int(parts[1])
+                    cost = float(parts[2]) if len(parts) > 2 else None
+
+                    origin = self.nav_points.get(origin_number)
+                    destination = self.nav_points.get(dest_number)
+                    if origin and destination:
+                        origin.add_neighbor(destination)
+                        destination.add_neighbor(origin)
+                        segment = NavSegment(origin_number, dest_number, cost,
+                                             origin_point=origin, destination_point=destination)
+                        self.nav_segments.append(segment)
+                    else:
+                        print(f"⚠ Segment ignored: {origin_number} → {dest_number} (node not found)")
+
+                elif mode == "air":
+                    name = parts[0]
+                    lat = float(parts[1])
+                    lon = float(parts[2])
+                    self.nav_airports[name] = NavAirport(name)
+                    dummy_point = NavPoint(-1, name, lat, lon)
+                    self.nav_airports[name].sids.append(dummy_point)
 
     def find_point_by_name(self, name):
         for point in self.nav_points.values():
@@ -134,6 +190,21 @@ class AirSpace:
                 current_paths.append(new_path)
 
         return None
+
+    def add_segment(self, origin_number, destination_number):
+        if origin_number in self.nav_points and destination_number in self.nav_points:
+            origin = self.nav_points[origin_number]
+            destination = self.nav_points[destination_number]
+
+            segment_name = f"{origin.name}-{destination.name}"
+            self.nav_segments.append(NavSegment(origin_number, destination_number,
+                                                origin.distance_to(destination),
+                                                origin_point=origin, destination_point=destination))
+
+            # Esto añade los vecinos correctamente
+            origin.add_neighbor(destination)
+            destination.add_neighbor(origin)
+
 
     def draw(self, highlight_nodes=None, highlight_path=None):
         if not self.nav_points:
@@ -206,7 +277,8 @@ class AirSpace:
         plt.show()
 
     def generate_kml(self, filename, path_nodes=None):
-        kml_content = """<?xml version="1.0" encoding="UTF-8"?>
+        try:
+            kml_content = """<?xml version="1.0" encoding="UTF-8"?>
     <kml xmlns="http://www.opengis.net/kml/2.2">
     <Document>
         <name>Flight Path</name>
@@ -217,49 +289,131 @@ class AirSpace:
             </LineStyle>
         </Style>"""
 
-        # Add the flight path if provided
-        if path_nodes and len(path_nodes) > 1:
-            kml_content += """
+            valid_points = []
+            if path_nodes:
+                for point in path_nodes:
+                    if isinstance(point, str):
+                        point = self.find_point_by_name(point)
+                    if point and hasattr(point, "longitude") and hasattr(point, "latitude"):
+                        valid_points.append(point)
+
+            if valid_points:
+                # Ruta de vuelo
+                kml_content += """
         <Placemark>
             <name>Flight Path</name>
             <styleUrl>#yellowLine</styleUrl>
             <LineString>
                 <coordinates>"""
-
-            for point in path_nodes:
-                kml_content += f"\n                {point.longitude},{point.latitude},0"
-
-            kml_content += """
+                for p in valid_points:
+                    kml_content += f"\n                {p.longitude},{p.latitude},0"
+                kml_content += """
                 </coordinates>
             </LineString>
         </Placemark>"""
 
-            for i, point in enumerate(path_nodes):
-                kml_content += f"""
+                # Marcadores de los puntos
+                for i, p in enumerate(valid_points):
+                    kml_content += f"""
         <Placemark>
-            <name>{point.name}</name>
-            <description>Point {i + 1} of {len(path_nodes)}</description>
+            <name>{p.name}</name>
+            <description>Point {i + 1} of {len(valid_points)}</description>
             <Point>
-                <coordinates>{point.longitude},{point.latitude},0</coordinates>
+                <coordinates>{p.longitude},{p.latitude},0</coordinates>
             </Point>
         </Placemark>"""
 
-        kml_content += """
+            else:
+                kml_content += """
+        <Placemark>
+            <name>No valid path</name>
+            <description>Empty or invalid path provided.</description>
+        </Placemark>"""
+
+            kml_content += """
     </Document>
     </kml>"""
 
-        with open(filename, 'w') as f:
-            f.write(kml_content)
-    @staticmethod
-    def open_in_google_earth(kml_file):
-        try:
-            if platform.system() == 'Windows':
-                os.startfile(kml_file)
-            elif platform.system() == 'Darwin':
-                subprocess.call(('open', kml_file))
-            else:
-                subprocess.call(('xdg-open', kml_file))
-            return True
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(kml_content)
+
         except Exception as e:
-            print(f"Error opening Google Earth: {e}")
-            return False
+            print(f"Error generating KML: {e}")
+            raise
+
+    def export_surprise_kml(self, filename, num_flights=6):
+        from xml.etree.ElementTree import Element, SubElement, tostring
+        from xml.dom.minidom import parseString
+
+        def kml_elem(tag, **kwargs):
+            e = Element(tag)
+            for k, v in kwargs.items():
+                e.set(k, v)
+            return e
+
+        def add_text(e, text):
+            e.text = text
+            return e
+
+        kml = kml_elem('kml', xmlns="http://www.opengis.net/kml/2.2",
+                       xmlns_gx="http://www.google.com/kml/ext/2.2")
+        doc = SubElement(kml, 'Document')
+        add_text(SubElement(doc, 'name'), 'Simulated Flights & Radars')
+
+        # Radar style
+        radar_style = SubElement(doc, 'Style', id="radarIcon")
+        icon_style = SubElement(radar_style, 'IconStyle')
+        icon = SubElement(icon_style, 'Icon')
+        add_text(icon, 'http://maps.google.com/mapfiles/kml/shapes/radar.png')
+        SubElement(icon_style, 'scale').text = "1.2"
+
+        # Plane style
+        plane_style = SubElement(doc, 'Style', id="flightIcon")
+        icon_style2 = SubElement(plane_style, 'IconStyle')
+        icon2 = SubElement(icon_style2, 'Icon')
+        add_text(icon2, 'http://maps.google.com/mapfiles/kml/shapes/airports.png')
+        SubElement(icon_style2, 'scale').text = "1.1"
+
+        # Choose 6 random airport pairs
+        airports = list(self.nav_airports.values())
+        used = set()
+        pairs = []
+        while len(pairs) < num_flights:
+            o, d = random.sample(airports, 2)
+            if (o.name, d.name) not in used:
+                path = self.find_shortest_path(o.name, d.name)
+                if path:
+                    used.add((o.name, d.name))
+                    pairs.append((o, d, path))
+
+        start_time = datetime.utcnow()
+
+        # Generate Tracks for flights
+        for i, (origin, dest, path) in enumerate(pairs):
+            pmark = SubElement(doc, 'Placemark')
+            add_text(SubElement(pmark, 'name'), f"Flight {i + 1}: {origin.name} to {dest.name}")
+            SubElement(pmark, 'styleUrl').text = "#flightIcon"
+
+            track = SubElement(pmark, '{http://www.google.com/kml/ext/2.2}Track')
+            timestamp = start_time
+
+            for node_name in path:
+                node = self.nav_points[node_name]
+                coord = f"{node.longitude},{node.latitude},10000"
+                add_text(SubElement(track, '{http://www.google.com/kml/ext/2.2}when'), timestamp.isoformat() + "Z")
+                add_text(SubElement(track, '{http://www.google.com/kml/ext/2.2}gx:coord'), coord)
+                timestamp += timedelta(seconds=10)  # 10s between points
+
+        # Add radars at 5 random points
+        radar_points = random.sample(list(self.nav_points.values()), 5)
+        for i, point in enumerate(radar_points):
+            radar = SubElement(doc, 'Placemark')
+            add_text(SubElement(radar, 'name'), f"Radar {i + 1} ({point.name})")
+            SubElement(radar, 'styleUrl').text = "#radarIcon"
+            point_elem = SubElement(radar, 'Point')
+            add_text(SubElement(point_elem, 'coordinates'), f"{point.longitude},{point.latitude},0")
+
+        # Final output
+        with open(filename, 'w', encoding='utf-8') as f:
+            pretty_xml = parseString(tostring(kml)).toprettyxml(indent="  ")
+            f.write(pretty_xml)
