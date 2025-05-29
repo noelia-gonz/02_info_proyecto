@@ -65,11 +65,11 @@ class AirSpaceGUI:
         load_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.X, expand=True)
 
         ttk.Button(load_frame, text="Load CAT",
-                   command=lambda: self.load_airspace("cat")).pack(side=tk.LEFT, padx=2)
+                   command=lambda: self.load_airspace("Cat")).pack(side=tk.LEFT, padx=2)
         ttk.Button(load_frame, text="Load ESP",
-                   command=lambda: self.load_airspace("esp")).pack(side=tk.LEFT, padx=2)
+                   command=lambda: self.load_airspace("Spain")).pack(side=tk.LEFT, padx=2)
         ttk.Button(load_frame, text="Load EUR",
-                   command=lambda: self.load_airspace("eur")).pack(side=tk.LEFT, padx=2)
+                   command=lambda: self.load_airspace("ECAC")).pack(side=tk.LEFT, padx=2)
         ttk.Button(load_frame, text="Custom Load...",
                    command=self.load_custom).pack(side=tk.LEFT, padx=2)
         ttk.Button(load_frame, text="Clear",
@@ -109,6 +109,8 @@ class AirSpaceGUI:
                    command=self.save_simulation_kml).pack(side=tk.LEFT, padx=2)
         ttk.Button(export_frame, text="Open Simulation KML",
                    command=self.open_simulation_kml).pack(side=tk.LEFT, padx=2)
+        ttk.Button(export_frame, text="View Full Airspace in GE",
+                   command=self.view_full_airspace).pack(side=tk.LEFT, padx=2)
 
     def load_airspace(self, region):
         try:
@@ -279,51 +281,180 @@ class AirSpaceGUI:
                             f"Flight planned! Total distance: {self.shortest_path_cost:.2f} km")
         self.update_drawing()
 
-    def export_kml(self):
-        filename = filedialog.asksaveasfilename(
-            defaultextension=".kml",
-            filetypes=[("KML Files", "*.kml"), ("All Files", "*.*")],
-            initialfile="airspace_view.kml"
-        )
-
+    def export_kml(self, filename=None):
         if not filename:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".kml",
+                filetypes=[("KML Files", "*.kml"), ("All Files", "*.*")],
+                initialfile="path_view.kml"
+            )
+
+        if not filename or not self.shortest_path:
             return
 
         try:
-            # Solo exportamos la ruta más corta
-            self.airspace.generate_kml(filename, self.shortest_path)
-            messagebox.showinfo("Success", f"KML file saved to:\n{filename}")
+            with open(filename, 'w') as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                f.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n')
+                f.write('<Document>\n')
+                f.write('<name>Flight Path</name>\n')
+
+                # Style for the path line
+                f.write('<Style id="yellowLine">\n')
+                f.write('<LineStyle>\n')
+                f.write('<color>7f00ffff</color>\n')  # Yellow color (AABBGGRR format)
+                f.write('<width>4</width>\n')
+                f.write('</LineStyle>\n')
+                f.write('</Style>\n')
+
+                # Path coordinates
+                f.write('<Placemark>\n')
+                f.write('<name>Flight Path</name>\n')
+                f.write('<styleUrl>#yellowLine</styleUrl>\n')
+                f.write('<LineString>\n')
+                f.write('<extrude>1</extrude>\n')
+                f.write('<tessellate>1</tessellate>\n')
+                f.write('<altitudeMode>absolute</altitudeMode>\n')
+                f.write('<coordinates>\n')
+                for point in self.shortest_path:
+                    f.write(f'{point.longitude},{point.latitude},10000\n')  # 10,000m altitude
+                f.write('</coordinates>\n')
+                f.write('</LineString>\n')
+                f.write('</Placemark>\n')
+
+                # Points along the path
+                for i, point in enumerate(self.shortest_path):
+                    f.write('<Placemark>\n')
+                    f.write(f'<name>{point.name}</name>\n')
+                    f.write('<Point>\n')
+                    f.write(f'<coordinates>{point.longitude},{point.latitude},0</coordinates>\n')
+                    f.write('</Point>\n')
+                    f.write('</Placemark>\n')
+
+                f.write('</Document>\n')
+                f.write('</kml>\n')
+
+            if filename == filedialog.asksaveasfilename():  # Only show success if user saved manually
+                messagebox.showinfo("Success", f"KML file saved to:\n{filename}")
+            return filename  # Return the filename for use in view_in_google_earth
+
         except Exception as e:
             messagebox.showerror("Error", f"Failed to export KML: {str(e)}")
+            return None
 
-    def view_in_google_earth(self):
+    def view_in_google_earth(self, animate=True):
         if not self.shortest_path:
             messagebox.showwarning("No Path", "Please calculate a path first")
             return
 
         try:
-            import tempfile
             temp_dir = tempfile.gettempdir()
             kml_file = os.path.join(temp_dir, f"flight_path_{int(time.time())}.kml")
 
-            elements = {
-                'points': True,
-                'segments': True,
-                'airports': True,
-                'reachable': [],
-                'path': self.shortest_path
-            }
-            self.airspace.generate_kml(kml_file, elements)
+            # Generate animated KML
+            self.airspace.generate_kml(kml_file, self.shortest_path, animate=animate)
+
+            # Open with Google Earth
             if platform.system() == 'Windows':
                 os.startfile(kml_file)
             elif platform.system() == 'Darwin':
-                subprocess.call(['open', kml_file])
+                subprocess.run(['open', kml_file], check=True)
             else:
-                subprocess.call(['xdg-open', kml_file])
+                subprocess.run(['xdg-open', kml_file], check=True)
 
-            messagebox.showinfo("Success", "Opening flight path in Google Earth...")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open Google Earth: {str(e)}")
+
+    def view_full_airspace(self):
+        """Export and view the entire loaded airspace in Google Earth"""
+        if not self.airspace.nav_points:
+            messagebox.showwarning("No Data", "No airspace data loaded")
+            return
+
+        try:
+            temp_dir = tempfile.gettempdir()
+            kml_file = os.path.join(temp_dir, f"full_airspace_{int(time.time())}.kml")
+
+            # Generate KML with all points and segments
+            with open(kml_file, 'w') as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                f.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n')
+                f.write('<Document>\n')
+                f.write('<name>Full Airspace</name>\n')
+
+                # Style for normal segments
+                f.write('<Style id="normalSegment">\n')
+                f.write('<LineStyle>\n')
+                f.write('<color>7faaaaaa</color>\n')  # Gray, semi-transparent
+                f.write('<width>1</width>\n')
+                f.write('</LineStyle>\n')
+                f.write('</Style>\n')
+
+                # Style for airports
+                f.write('<Style id="airportStyle">\n')
+                f.write('<IconStyle>\n')
+                f.write('<scale>1.2</scale>\n')
+                f.write('<Icon>\n')
+                f.write('<href>http://maps.google.com/mapfiles/kml/shapes/airports.png</href>\n')
+                f.write('</Icon>\n')
+                f.write('</IconStyle>\n')
+                f.write('</Style>\n')
+
+                # Draw all segments
+                f.write('<Folder>\n<name>Airway Segments</name>\n')
+                for seg in self.airspace.nav_segments:
+                    if seg.origin and seg.destination:
+                        f.write('<Placemark>\n')
+                        f.write('<styleUrl>#normalSegment</styleUrl>\n')
+                        f.write('<LineString>\n')
+                        f.write('<coordinates>\n')
+                        f.write(f'{seg.origin.longitude},{seg.origin.latitude},10000\n')
+                        f.write(f'{seg.destination.longitude},{seg.destination.latitude},10000\n')
+                        f.write('</coordinates>\n')
+                        f.write('</LineString>\n')
+                        f.write('</Placemark>\n')
+                f.write('</Folder>\n')
+
+                # Draw all navigation points
+                f.write('<Folder>\n<name>Navigation Points</name>\n')
+                for point in self.airspace.nav_points.values():
+                    f.write('<Placemark>\n')
+                    f.write(f'<name>{point.name}</name>\n')
+                    f.write('<Point>\n')
+                    f.write(f'<coordinates>{point.longitude},{point.latitude},0</coordinates>\n')
+                    f.write('</Point>\n')
+                    f.write('</Placemark>\n')
+                f.write('</Folder>\n')
+
+                # Draw all airports
+                if self.airspace.nav_airports:
+                    f.write('<Folder>\n<name>Airports</name>\n')
+                    for airport in self.airspace.nav_airports.values():
+                        if airport.sids:  # Only if it has at least one SID point
+                            pos = airport.sids[0].get_coords()
+                            f.write('<Placemark>\n')
+                            f.write(f'<name>{airport.name}</name>\n')
+                            f.write('<styleUrl>#airportStyle</styleUrl>\n')
+                            f.write('<Point>\n')
+                            f.write(f'<coordinates>{pos[1]},{pos[0]},0</coordinates>\n')
+                            f.write('</Point>\n')
+                            f.write('</Placemark>\n')
+                    f.write('</Folder>\n')
+
+                f.write('</Document>\n')
+                f.write('</kml>\n')
+
+            # Open in Google Earth
+            if platform.system() == 'Windows':
+                os.startfile(kml_file)
+            elif platform.system() == 'Darwin':
+                subprocess.run(['open', kml_file], check=True)
+            else:
+                subprocess.run(['xdg-open', kml_file], check=True)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export full airspace: {str(e)}")
+
     def on_click(self, event):
         if event.xdata and event.ydata:
             print(f"Clicked at: ({event.xdata:.4f}, {event.ydata:.4f})")

@@ -276,10 +276,10 @@ class AirSpace:
         plt.tight_layout()
         plt.show()
 
-    def generate_kml(self, filename, path_nodes=None):
+    def generate_kml(self, filename, path_nodes=None, animate=False):
         try:
             kml_content = """<?xml version="1.0" encoding="UTF-8"?>
-    <kml xmlns="http://www.opengis.net/kml/2.2">
+    <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
     <Document>
         <name>Flight Path</name>
         <Style id="yellowLine">
@@ -287,6 +287,15 @@ class AirSpace:
                 <color>7f00ffff</color>
                 <width>4</width>
             </LineStyle>
+        </Style>
+        <Style id="airplane">
+            <IconStyle>
+                <scale>1.5</scale>
+                <heading>0</heading>
+                <Icon>
+                    <href>http://maps.google.com/mapfiles/kml/shapes/airports.png</href>
+                </Icon>
+            </IconStyle>
         </Style>"""
 
             valid_points = []
@@ -298,21 +307,58 @@ class AirSpace:
                         valid_points.append(point)
 
             if valid_points:
-                # Ruta de vuelo
+                # Flight path line
                 kml_content += """
         <Placemark>
             <name>Flight Path</name>
             <styleUrl>#yellowLine</styleUrl>
             <LineString>
+                <extrude>1</extrude>
+                <tessellate>1</tessellate>
+                <altitudeMode>absolute</altitudeMode>
                 <coordinates>"""
                 for p in valid_points:
-                    kml_content += f"\n                {p.longitude},{p.latitude},0"
+                    kml_content += f"\n                {p.longitude},{p.latitude},10000"
                 kml_content += """
                 </coordinates>
             </LineString>
         </Placemark>"""
 
-                # Marcadores de los puntos
+                # Animated airplane if requested
+                if animate:
+                    kml_content += """
+        <Placemark>
+            <name>Airplane</name>
+            <styleUrl>#airplane</styleUrl>
+            <gx:Track>
+                <altitudeMode>absolute</altitudeMode>"""
+
+                    # Calculate time intervals based on distance between points
+                    current_time = datetime.utcnow()
+                    total_distance = sum(valid_points[i].distance_to(valid_points[i + 1])
+                                         for i in range(len(valid_points) - 1))
+                    total_time = total_distance * 0.02  # 0.02 seconds per km (adjust for speed)
+
+                    # First point
+                    kml_content += f"""
+                <when>{current_time.strftime('%Y-%m-%dT%H:%M:%SZ')}</when>
+                <gx:coord>{valid_points[0].longitude} {valid_points[0].latitude} 10000</gx:coord>"""
+
+                    # Intermediate points
+                    for i in range(1, len(valid_points)):
+                        segment_distance = valid_points[i - 1].distance_to(valid_points[i])
+                        segment_time = segment_distance * 0.02
+                        current_time += timedelta(seconds=segment_time)
+
+                        kml_content += f"""
+                <when>{current_time.strftime('%Y-%m-%dT%H:%M:%SZ')}</when>
+                <gx:coord>{valid_points[i].longitude} {valid_points[i].latitude} 10000</gx:coord>"""
+
+                    kml_content += """
+            </gx:Track>
+        </Placemark>"""
+
+                # Points along the path
                 for i, p in enumerate(valid_points):
                     kml_content += f"""
         <Placemark>
@@ -321,13 +367,6 @@ class AirSpace:
             <Point>
                 <coordinates>{p.longitude},{p.latitude},0</coordinates>
             </Point>
-        </Placemark>"""
-
-            else:
-                kml_content += """
-        <Placemark>
-            <name>No valid path</name>
-            <description>Empty or invalid path provided.</description>
         </Placemark>"""
 
             kml_content += """
@@ -340,7 +379,6 @@ class AirSpace:
         except Exception as e:
             print(f"Error generating KML: {e}")
             raise
-
     def export_surprise_kml(self, filename, num_flights=6):
         from xml.etree.ElementTree import Element, SubElement, tostring
         from xml.dom.minidom import parseString
