@@ -132,6 +132,31 @@ class Graph:
         self.mode = "airspace"
         return True
 
+    def add_node_by_coords(self, x, y):
+        if self.mode == "airspace":
+            raise ValueError("Cannot add nodes in airspace mode")
+
+        # Generate a unique name
+        name = f"N{len(self.nodes) + 1}"
+        while self.get_node_by_name(name):
+            name = f"N{len(self.nodes) + 1}"
+
+        new_node = Node(name, x, y)
+        self.nodes.append(new_node)
+        return new_node
+
+    def add_segment_by_nodes(self, node1, node2):
+
+        if self.mode == "airspace":
+            raise ValueError("Cannot add segments in airspace mode")
+
+        if node1 and node2 and node1 != node2:
+            if node2 not in node1.neighbors:
+                node1.neighbors.append(node2)
+                node2.neighbors.append(node1)  # Make it bidirectional
+                return True
+        return False
+
     def save_to_file(self, filename):
         if self.mode != "graph":
             raise ValueError("Cannot save airspace data in graph format")

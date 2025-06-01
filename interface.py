@@ -366,7 +366,6 @@ class AirSpaceGUI:
             messagebox.showerror("Error", f"Failed to open Google Earth: {str(e)}")
 
     def view_full_airspace(self):
-        """Export and view the entire loaded airspace in Google Earth"""
         if not self.airspace.nav_points:
             messagebox.showwarning("No Data", "No airspace data loaded")
             return
@@ -374,8 +373,6 @@ class AirSpaceGUI:
         try:
             temp_dir = tempfile.gettempdir()
             kml_file = os.path.join(temp_dir, f"full_airspace_{int(time.time())}.kml")
-
-            # Generate KML with all points and segments
             with open(kml_file, 'w') as f:
                 f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
                 f.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n')
